@@ -28,3 +28,7 @@ src/integration/GoogleearchServiceAPIkey/
 *.json
 .env.local
 .env.production
+
+# BiomeCode API
+biomecode-api/.env
+biomecode-api/keys/
