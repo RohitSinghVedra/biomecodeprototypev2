@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Pin, Circle, Hexagon, TreePine, Sprout, Brain, MapPin, CloudRain, Layers, DropletIcon, BrainCircuit } from 'lucide-react';
+import { Pin, Circle, Hexagon, TreePine, Sprout, Brain, MapPin, CloudRain, Layers, DropletIcon, BrainCircuit, Database, AlertCircle } from 'lucide-react';
 import { useRegion } from '../../../context/RegionContext';
 import Button from '../../common/Button';
 import Card from '../../common/Card';
@@ -9,15 +9,32 @@ import { Region } from '../../../types';
 import { MapContainer, TileLayer, Circle as LeafletCircle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet-draw';
+import { changeKPI, changeTiles, climateKPI, soilKPI, landcoverAreas } from '../../../lib/biomecodeApi';
 
 // Component to handle map updates and drawing
-const MapUpdater = ({ center, zoom, onRegionDrawn }: { 
+const MapUpdater = ({ center, zoom, onRegionDrawn, onTileLayerAdded }: { 
   center: [number, number]; 
   zoom: number;
   onRegionDrawn: (region: Region) => void;
+  onTileLayerAdded: (tileUrl: string) => void;
 }) => {
   const map = useMap();
   const [drawnItems, setDrawnItems] = useState<L.FeatureGroup>(new L.FeatureGroup());
+  const [changeTileLayer, setChangeTileLayer] = useState<L.TileLayer | null>(null);
+  
+  // Function to add/update change tile layer
+  const updateChangeTileLayer = (tileUrl: string) => {
+    // Remove existing change tile layer
+    if (changeTileLayer) {
+      map.removeLayer(changeTileLayer);
+    }
+    
+    // Add new tile layer
+    const tileLayer = L.tileLayer(tileUrl, { opacity: 0.75 });
+    tileLayer.addTo(map);
+    setChangeTileLayer(tileLayer);
+    onTileLayerAdded(tileUrl);
+  };
   
   useEffect(() => {
     // Add draw control with better styling and titles
@@ -164,6 +181,44 @@ const MapUpdater = ({ center, zoom, onRegionDrawn }: {
         return;
       }
       
+      // Call API functions after drawing
+      const callAPIs = async () => {
+        try {
+          // Convert region to GeoJSON geometry for API calls
+          const geom = region.type === 'circle' 
+            ? {
+                type: 'Point',
+                coordinates: [region.center.lng, region.center.lat]
+              }
+            : {
+                type: 'Polygon',
+                coordinates: [region.coordinates?.map(coord => [coord.lng, coord.lat]) || []]
+              };
+
+          // Call changeKPI and changeTiles
+          const [changeResult, tilesResult] = await Promise.all([
+            changeKPI(geom, 2018, 2024),
+            changeTiles(geom, 2018, 2024)
+          ]);
+
+          // Update tile layer
+          if (tilesResult.tileUrl) {
+            updateChangeTileLayer(tilesResult.tileUrl);
+          }
+
+          // Store API results in region for display
+          region.apiResults = {
+            changeKPI: changeResult,
+            changeTiles: tilesResult
+          };
+
+        } catch (error) {
+          console.error('API calls failed:', error);
+          // Continue with region selection even if API fails
+        }
+      };
+
+      callAPIs();
       onRegionDrawn(region);
     };
     
@@ -187,6 +242,11 @@ const MapSelection: React.FC = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapZoom, setMapZoom] = useState(3);
   const [isLoading, setIsLoading] = useState(false);
+  const [dataSource, setDataSource] = useState<'LIVE' | 'Mock'>('Mock');
+  const [kpiData, setKpiData] = useState<any>(null);
+  const [climateYear, setClimateYear] = useState(2024);
+  const [landCoverYear, setLandCoverYear] = useState(2024);
+  const [trainingAssetId, setTrainingAssetId] = useState('');
 
   const handleRegionDrawn = (region: Region) => {
     setIsLoading(true);
@@ -202,6 +262,76 @@ const MapSelection: React.FC = () => {
     setMapZoom(zoom);
     
     setIsLoading(false);
+  };
+
+  const handleTileLayerAdded = (tileUrl: string) => {
+    console.log('Tile layer added:', tileUrl);
+  };
+
+  const handleClimateAnalysis = async () => {
+    if (!selectedRegion) return;
+    
+    try {
+      setIsLoading(true);
+      const geom = selectedRegion.type === 'circle' 
+        ? { type: 'Point', coordinates: [selectedRegion.center.lng, selectedRegion.center.lat] }
+        : { type: 'Polygon', coordinates: [selectedRegion.coordinates?.map(coord => [coord.lng, coord.lat]) || []] };
+      
+      const result = await climateKPI(geom, climateYear);
+      setKpiData({ type: 'climate', data: result });
+      setDataSource('LIVE');
+    } catch (error) {
+      console.error('Climate analysis failed:', error);
+      setDataSource('Mock');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSoilAnalysis = async () => {
+    if (!selectedRegion) return;
+    
+    try {
+      setIsLoading(true);
+      const geom = selectedRegion.type === 'circle' 
+        ? { type: 'Point', coordinates: [selectedRegion.center.lng, selectedRegion.center.lat] }
+        : { type: 'Polygon', coordinates: [selectedRegion.coordinates?.map(coord => [coord.lng, coord.lat]) || []] };
+      
+      const result = await soilKPI(geom);
+      setKpiData({ type: 'soil', data: result });
+      setDataSource('LIVE');
+    } catch (error) {
+      console.error('Soil analysis failed:', error);
+      setDataSource('Mock');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLandCoverAnalysis = async () => {
+    if (!selectedRegion || !trainingAssetId) return;
+    
+    try {
+      setIsLoading(true);
+      const geom = selectedRegion.type === 'circle' 
+        ? { type: 'Point', coordinates: [selectedRegion.center.lng, selectedRegion.center.lat] }
+        : { type: 'Polygon', coordinates: [selectedRegion.coordinates?.map(coord => [coord.lng, coord.lat]) || []] };
+      
+      const result = await landcoverAreas(geom, landCoverYear, trainingAssetId);
+      
+      if (result.status === 501) {
+        alert('Land Cover Analysis requires a training asset. Please provide a valid training asset ID.');
+        return;
+      }
+      
+      setKpiData({ type: 'landcover', data: result });
+      setDataSource('LIVE');
+    } catch (error) {
+      console.error('Land cover analysis failed:', error);
+      setDataSource('Mock');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -240,6 +370,7 @@ const MapSelection: React.FC = () => {
               center={mapCenter} 
               zoom={mapZoom} 
               onRegionDrawn={handleRegionDrawn}
+              onTileLayerAdded={handleTileLayerAdded}
             />
             
             <TileLayer
@@ -318,6 +449,69 @@ const MapSelection: React.FC = () => {
                 </div>
               </div>
 
+              {/* Data Source Status Chip */}
+              <div className="bg-white rounded-lg border border-gray-200 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Data Source:</span>
+                  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${
+                    dataSource === 'LIVE' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {dataSource === 'LIVE' ? (
+                      <>
+                        <Database size={14} />
+                        <span>LIVE (Earth Engine)</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle size={14} />
+                        <span>Mock</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* KPI Display */}
+              {kpiData && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-3">Analysis Results</h4>
+                  <div className="space-y-2">
+                    {kpiData.type === 'climate' && (
+                      <div>
+                        <h5 className="font-medium text-gray-700">Climate Data ({kpiData.data.year})</h5>
+                        <div className="text-sm text-gray-600">
+                          <p>Temperature: {kpiData.data.values?.t2m?.toFixed(1)}°C</p>
+                          <p>Precipitation: {kpiData.data.values?.tp?.toFixed(1)}mm</p>
+                          <p>Wind Speed: {kpiData.data.values?.u10?.toFixed(1)} m/s</p>
+                        </div>
+                      </div>
+                    )}
+                    {kpiData.type === 'soil' && (
+                      <div>
+                        <h5 className="font-medium text-gray-700">Soil Composition ({kpiData.data.depth})</h5>
+                        <div className="text-sm text-gray-600">
+                          <p>Clay: {kpiData.data.values?.clay?.toFixed(1)}%</p>
+                          <p>Silt: {kpiData.data.values?.silt?.toFixed(1)}%</p>
+                          <p>Sand: {kpiData.data.values?.sand?.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    )}
+                    {kpiData.type === 'landcover' && (
+                      <div>
+                        <h5 className="font-medium text-gray-700">Land Cover Areas ({kpiData.data.year})</h5>
+                        <div className="text-sm text-gray-600">
+                          {kpiData.data.areas?.map((area: any, index: number) => (
+                            <p key={index}>Class {area.lc}: {area.sum?.toFixed(1)} ha</p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Analysis Status */}
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h4 className="text-lg font-semibold text-gray-800 mb-3">Analysis Status</h4>
@@ -344,65 +538,83 @@ const MapSelection: React.FC = () => {
                 )}
               </div>
 
-              {/* Next Steps */}
+              {/* Analysis Controls */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
-                <h4 className="text-lg font-semibold text-blue-800 mb-3">Next Steps</h4>
+                <h4 className="text-lg font-semibold text-blue-800 mb-3">Live Analysis</h4>
                 <p className="text-sm text-blue-700 mb-4">
-                  Your region has been analyzed! Explore the detailed data in each module:
+                  Run live Earth Engine analysis on your selected region:
                 </p>
                 
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setActiveModule('climate')}
-                    className="w-full text-left p-3 rounded-lg bg-blue-100 hover:bg-blue-200 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <CloudRain size={16} className="text-blue-600" />
-                        <span className="text-sm font-medium text-blue-800">Climate Analysis</span>
-                      </div>
-                      <span className="text-xs text-blue-600">→</span>
+                <div className="space-y-3">
+                  {/* Climate Analysis */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <CloudRain size={16} className="text-blue-600" />
+                      <span className="text-sm font-medium text-blue-800">Climate Analysis</span>
                     </div>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setActiveModule('land')}
-                    className="w-full text-left p-3 rounded-lg bg-green-100 hover:bg-green-200 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Layers size={16} className="text-green-600" />
-                        <span className="text-sm font-medium text-green-800">Land Cover</span>
-                      </div>
-                      <span className="text-xs text-green-600">→</span>
+                    <div className="flex space-x-2">
+                      <input
+                        type="number"
+                        value={climateYear}
+                        onChange={(e) => setClimateYear(parseInt(e.target.value))}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="Year"
+                      />
+                      <button
+                        onClick={handleClimateAnalysis}
+                        disabled={isLoading}
+                        className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        Analyze
+                      </button>
                     </div>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setActiveModule('soil')}
-                    className="w-full text-left p-3 rounded-lg bg-yellow-100 hover:bg-yellow-200 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <DropletIcon size={16} className="text-yellow-600" />
-                        <span className="text-sm font-medium text-yellow-800">Soil Analysis</span>
-                      </div>
-                      <span className="text-xs text-yellow-600">→</span>
+                  </div>
+
+                  {/* Soil Analysis */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <DropletIcon size={16} className="text-yellow-600" />
+                      <span className="text-sm font-medium text-yellow-800">Soil Analysis</span>
                     </div>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setActiveModule('simulation')}
-                    className="w-full text-left p-3 rounded-lg bg-purple-100 hover:bg-purple-200 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <BrainCircuit size={16} className="text-purple-600" />
-                        <span className="text-sm font-medium text-purple-800">Simulation</span>
-                      </div>
-                      <span className="text-xs text-purple-600">→</span>
+                    <button
+                      onClick={handleSoilAnalysis}
+                      disabled={isLoading}
+                      className="w-full px-3 py-2 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 disabled:opacity-50"
+                    >
+                      Analyze Soil Composition
+                    </button>
+                  </div>
+
+                  {/* Land Cover Analysis */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Layers size={16} className="text-green-600" />
+                      <span className="text-sm font-medium text-green-800">Land Cover Analysis</span>
                     </div>
-                  </button>
+                    <div className="space-y-2">
+                      <input
+                        type="number"
+                        value={landCoverYear}
+                        onChange={(e) => setLandCoverYear(parseInt(e.target.value))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="Year"
+                      />
+                      <input
+                        type="text"
+                        value={trainingAssetId}
+                        onChange={(e) => setTrainingAssetId(e.target.value)}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        placeholder="Training Asset ID"
+                      />
+                      <button
+                        onClick={handleLandCoverAnalysis}
+                        disabled={isLoading || !trainingAssetId}
+                        className="w-full px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Analyze Land Cover
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
