@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Leaflet Draw Controls Styling */
+.leaflet-draw-toolbar {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.leaflet-draw-toolbar a {
+  background-color: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  margin: 2px !important;
+  width: 40px !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+}
+
+.leaflet-draw-toolbar a:hover {
+  background-color: #f3f4f6 !important;
+  border-color: #2D6A4F !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(45, 106, 79, 0.2) !important;
+}
+
+.leaflet-draw-toolbar a:active {
+  background-color: #2D6A4F !important;
+  color: white !important;
+}
+
+/* Fix text visibility in drawing controls */
+.leaflet-draw-toolbar a span {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  text-align: center !important;
+  line-height: 1.2 !important;
+  padding: 2px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: visible !important;
+}
+
+.leaflet-draw-toolbar a:hover span {
+  color: #2D6A4F !important;
+}
+
+.leaflet-draw-toolbar a:active span {
+  color: white !important;
+}
+
+/* Custom tooltips for better UX */
+.leaflet-draw-toolbar a[title]:hover::after {
+  content: attr(title) !important;
+  position: absolute !important;
+  background: #1f2937 !important;
+  color: white !important;
+  padding: 6px 10px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  z-index: 1000 !important;
+  top: -35px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+}
+
+.leaflet-draw-toolbar a[title]:hover::before {
+  content: '' !important;
+  position: absolute !important;
+  border: 5px solid transparent !important;
+  border-top-color: #1f2937 !important;
+  top: -10px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 1000 !important;
+}
+
+/* Improve drawing shapes visibility */
+.leaflet-draw-edit-edit {
+  background-color: #fbbf24 !important;
+}
+
+.leaflet-draw-edit-remove {
+  background-color: #ef4444 !important;
+}
+
+/* Custom styling for active drawing mode */
+.leaflet-draw-toolbar a.leaflet-draw-draw-circle,
+.leaflet-draw-toolbar a.leaflet-draw-draw-polygon,
+.leaflet-draw-toolbar a.leaflet-draw-draw-rectangle {
+  background-color: #2D6A4F !important;
+  color: white !important;
+}
+
+.leaflet-draw-toolbar a.leaflet-draw-draw-circle span,
+.leaflet-draw-toolbar a.leaflet-draw-draw-polygon span,
+.leaflet-draw-toolbar a.leaflet-draw-draw-rectangle span {
+  color: white !important;
+}
+
+/* Fix layer control visibility */
+.leaflet-control-layers {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.leaflet-control-layers-toggle {
+  background-color: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  border-radius: 6px !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Improve map popup styling */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-popup-content {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
